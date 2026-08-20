@@ -6,7 +6,7 @@ A super-simple browser-based serial monitor for Arduino/embedded projects.
 
 A single-file, browser-based serial monitor for Arduino/ESP32 projects. No install, no drivers beyond what your OS already uses — just open the HTML file in a Chromium-based browser and connect.
 
-![Serial Monitor connected and logging CAN/TWAI output](./images/serial-monitor-screenshot.png)
+![Serial Monitor connected and logging CAN/TWAI output](./serial-monitor-screenshot.png)
 
 *(Log contents above are dummy data for illustration — not live output.)*
 
