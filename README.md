@@ -17,7 +17,7 @@ A single-file, browser-based serial monitor for Arduino/ESP32 projects. No insta
 
 ## Getting started
 
-1. Open `serial-monitor.html` in a supported browser.
+1. Open your own local copy of index.html, or use the Netlify hosted version here: https://browserserialmonitor.netlify.app/.
 2. Plug in your board.
 3. Set the **Baud** dropdown to match your sketch's `Serial.begin(...)` rate (or pick **Custom…** for anything not listed).
 4. Click **Connect** and select your board's port from the browser's picker.
@@ -50,6 +50,6 @@ A single-file, browser-based serial monitor for Arduino/ESP32 projects. No insta
 
 ## Limitations
 
-- One connection at a time — closing and reconnecting is required to switch ports.
+- One connection at a time — closing and reconnecting is required to switch ports. You also must disconnect if you want to upload firmware via your IDE of choice. 
 - No data logging/export to file yet (copy from the log view if needed).
 - Line-buffered display: partial lines longer than 200 characters with no newline will flush early to avoid the buffer growing unbounded.
