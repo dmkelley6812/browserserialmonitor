@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serial Monitor</title>
+<style>
+  :root {
+    --bg: #0d1210;
+    --panel: #121a17;
+    --border: #24332c;
+    --text: #d7e4dc;
+    --text-dim: #7c948a;
+    --accent: #4fd18b;
+    --accent-dim: #2c6b4c;
+    --warn: #e0a13a;
+    --err: #e05f4f;
+    --mono: 'SF Mono', 'JetBrains Mono', 'Consolas', 'Menlo', monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  #app { display: flex; flex-direction: column; height: 100vh; }
+
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .brand {
+    font-weight: 600; letter-spacing: 0.03em; color: var(--accent);
+    margin-right: 8px; white-space: nowrap;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-dim); flex-shrink: 0;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .dot.connected { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .dot.error { background: var(--err); box-shadow: 0 0 6px var(--err); }
+
+  select, button, input[type=text] {
+    background: #0a0f0d;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+  }
+  select:focus, input:focus { border-color: var(--accent-dim); }
+  button {
+    cursor: pointer;
+    color: var(--accent);
+    border-color: var(--accent-dim);
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  button:hover:not(:disabled) { background: var(--accent-dim); color: #06120c; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.danger { color: var(--err); border-color: #6b3129; }
+  button.danger:hover:not(:disabled) { background: #6b3129; color: #fff; }
+
+  .spacer { flex: 1; }
+
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+  }
+  .line { display: flex; gap: 10px; }
+  .line .ts { color: var(--text-dim); flex-shrink: 0; user-select: none; }
+  .line.rx .msg { color: var(--text); }
+  .line.tx .msg { color: var(--accent); }
+  .line.sys .msg { color: var(--warn); font-style: italic; }
+  .line.err .msg { color: var(--err); }
+
+  footer {
+    display: flex; gap: 8px;
+    padding: 10px 14px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+  }
+  #sendInput { flex: 1; }
+  .toolbar-group { display: flex; align-items: center; gap: 6px; }
+  label.inline { color: var(--text-dim); font-size: 11px; margin-right: 2px; }
+
+  #status {
+    font-size: 11px; color: var(--text-dim); padding: 4px 14px;
+    background: var(--panel); border-top: 1px solid var(--border);
+  }
+
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+
+  .unsupported {
+    display: flex; align-items: center; justify-content: center;
+    height: 100vh; text-align: center; padding: 20px;
+  }
+  .unsupported div { max-width: 420px; color: var(--text-dim); }
+  .unsupported strong { color: var(--warn); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="unsupportedNotice" class="unsupported" style="display:none;">
+    <div>
+      <strong>Web Serial API not available.</strong><br><br>
+      This tool needs a Chromium-based browser (Chrome, Edge, Opera) served over HTTPS or localhost.
+      Firefox and Safari don't support Web Serial yet.
+    </div>
+  </div>
+
+  <div id="main" style="display:none; flex-direction:column; height:100%;">
+    <header>
+      <span class="brand">SERIAL MONITOR</span>
+      <span id="statusDot" class="dot"></span>
+
+      <div class="toolbar-group">
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+      </div>
+
+      <div class="toolbar-group">
+        <label class="inline" for="baudSelect">Baud</label>
+        <select id="baudSelect">
+          <option value="300">300</option>
+          <option value="1200">1200</option>
+          <option value="2400">2400</option>
+          <option value="4800">4800</option>
+          <option value="9600" selected>9600</option>
+          <option value="19200">19200</option>
+          <option value="38400">38400</option>
+          <option value="57600">57600</option>
+          <option value="74880">74880</option>
+          <option value="115200">115200</option>
+          <option value="230400">230400</option>
+          <option value="250000">250000</option>
+          <option value="460800">460800</option>
+          <option value="921600">921600</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <input type="text" id="customBaud" placeholder="baud" style="width:70px; display:none;">
+      </div>
+
+      <div class="toolbar-group">
+        <label class="inline" for="lineEnding">Newline</label>
+        <select id="lineEnding">
+          <option value="\n">LF</option>
+          <option value="\r">CR</option>
+          <option value="\r\n" selected>CRLF</option>
+          <option value="">None</option>
+        </select>
+      </div>
+
+      <label class="toolbar-group" style="cursor:pointer;">
+        <input type="checkbox" id="autoscroll" checked style="accent-color: var(--accent);">
+        <span class="inline">Autoscroll</span>
+      </label>
+
+      <label class="toolbar-group" style="cursor:pointer;">
+        <input type="checkbox" id="timestamps" checked style="accent-color: var(--accent);">
+        <span class="inline">Timestamps</span>
+      </label>
+
+      <div class="spacer"></div>
+      <button id="clearBtn">Clear</button>
+    </header>
+
+    <div id="log"></div>
+
+    <div id="status">Not connected. Click Connect and pick a port.</div>
+
+    <footer>
+      <input type="text" id="sendInput" placeholder="Type data to send, press Enter…" disabled>
+      <button id="sendBtn" disabled>Send</button>
+    </footer>
+  </div>
+</div>
+
+<script>
+(() => {
+  if (!('serial' in navigator)) {
+    document.getElementById('unsupportedNotice').style.display = 'flex';
+    return;
+  }
+  document.getElementById('main').style.display = 'flex';
+
+  const $ = id => document.getElementById(id);
+  const logEl = $('log');
+  const statusEl = $('status');
+  const dotEl = $('statusDot');
+  const connectBtn = $('connectBtn');
+  const disconnectBtn = $('disconnectBtn');
+  const baudSelect = $('baudSelect');
+  const customBaud = $('customBaud');
+  const lineEndingSelect = $('lineEnding');
+  const autoscrollChk = $('autoscroll');
+  const timestampsChk = $('timestamps');
+  const clearBtn = $('clearBtn');
+  const sendInput = $('sendInput');
+  const sendBtn = $('sendBtn');
+
+  let port = null;
+  let reader = null;
+  let writer = null;
+  let readableClosed = null;
+  let keepReading = false;
+  let inputBuffer = '';
+
+  function ts() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3,'0')}`;
+  }
+
+  function appendLine(text, type) {
+    const wasAtBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
+    const row = document.createElement('div');
+    row.className = `line ${type}`;
+    if (timestampsChk.checked) {
+      const tsSpan = document.createElement('span');
+      tsSpan.className = 'ts';
+      tsSpan.textContent = ts();
+      row.appendChild(tsSpan);
+    }
+    const msg = document.createElement('span');
+    msg.className = 'msg';
+    msg.textContent = text;
+    row.appendChild(msg);
+    logEl.appendChild(row);
+    if (autoscrollChk.checked && wasAtBottom) {
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  }
+
+  function setStatus(text) { statusEl.textContent = text; }
+
+  function setConnectedUI(connected) {
+    connectBtn.disabled = connected;
+    disconnectBtn.disabled = !connected;
+    sendInput.disabled = !connected;
+    sendBtn.disabled = !connected;
+    baudSelect.disabled = connected;
+    customBaud.disabled = connected;
+    dotEl.className = 'dot' + (connected ? ' connected' : '');
+  }
+
+  baudSelect.addEventListener('change', () => {
+    customBaud.style.display = baudSelect.value === 'custom' ? 'inline-block' : 'none';
+  });
+
+  function currentBaud() {
+    if (baudSelect.value === 'custom') {
+      const v = parseInt(customBaud.value, 10);
+      return Number.isFinite(v) && v > 0 ? v : 9600;
+    }
+    return parseInt(baudSelect.value, 10);
+  }
+
+  async function connect() {
+    try {
+      port = await navigator.serial.requestPort();
+      const baudRate = currentBaud();
+      await port.open({ baudRate });
+
+      try {
+        await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+      } catch (sigErr) {
+        // Some adapters don't support signal control - safe to ignore
+      }
+
+      keepReading = true;
+      setConnectedUI(true);
+      setStatus(`Connected at ${baudRate} baud.`);
+      appendLine(`Connected at ${baudRate} baud`, 'sys');
+      dotEl.classList.remove('error');
+
+      readLoop();
+
+      port.addEventListener('disconnect', () => {
+        appendLine('Device disconnected', 'err');
+        cleanupAfterClose();
+      });
+
+    } catch (err) {
+      if (err.name !== 'NotFoundError') {
+        appendLine(`Connect error: ${err.message}`, 'err');
+        dotEl.classList.add('error');
+      }
+      setConnectedUI(false);
+    }
+  }
+
+  async function readLoop() {
+    const textDecoder = new TextDecoder('utf-8');
+    reader = port.readable.getReader();
+
+    try {
+      while (keepReading) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value && value.length > 0) {
+          // value is a raw Uint8Array straight off the port - decode manually
+          const chunk = textDecoder.decode(value, { stream: true });
+          if (chunk) handleIncoming(chunk);
+        }
+      }
+    } catch (err) {
+      appendLine(`Read error: ${err.message}`, 'err');
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  function handleIncoming(chunk) {
+    inputBuffer += chunk;
+    const parts = inputBuffer.split(/\r\n|\r|\n/);
+    inputBuffer = parts.pop();
+    for (const p of parts) {
+      if (p.length > 0) appendLine(p, 'rx');
+    }
+    // Also flush partial line data for near-real-time feel if it's getting long
+    if (inputBuffer.length > 200) {
+      appendLine(inputBuffer, 'rx');
+      inputBuffer = '';
+    }
+  }
+
+  async function disconnect() {
+    keepReading = false;
+    try {
+      if (reader) {
+        await reader.cancel();
+      }
+    } catch (e) {}
+    try {
+      if (writer) {
+        await writer.close();
+        writer = null;
+      }
+    } catch (e) {}
+    try {
+      if (port) {
+        await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+      }
+    } catch (e) {}
+    try {
+      if (port) await port.close();
+    } catch (e) {}
+    cleanupAfterClose();
+  }
+
+  function cleanupAfterClose() {
+    if (inputBuffer.length > 0) {
+      appendLine(inputBuffer, 'rx');
+      inputBuffer = '';
+    }
+    setConnectedUI(false);
+    setStatus('Disconnected.');
+    appendLine('Disconnected', 'sys');
+    reader = null;
+    port = null;
+  }
+
+  async function sendData() {
+    const text = sendInput.value;
+    if (!text || !port || !port.writable) return;
+    const ending = lineEndingSelect.value;
+    const toSend = text + ending;
+    try {
+      const encoder = new TextEncoderStream();
+      const writableClosed = encoder.readable.pipeTo(port.writable);
+      const w = encoder.writable.getWriter();
+      await w.write(toSend);
+      await w.close();
+      await writableClosed.catch(() => {});
+      appendLine(text, 'tx');
+      sendInput.value = '';
+    } catch (err) {
+      appendLine(`Send error: ${err.message}`, 'err');
+    }
+  }
+
+  connectBtn.addEventListener('click', connect);
+  disconnectBtn.addEventListener('click', disconnect);
+  clearBtn.addEventListener('click', () => { logEl.innerHTML = ''; });
+  sendBtn.addEventListener('click', sendData);
+  sendInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') sendData();
+  });
+
+  // Reconnect to a previously granted port automatically if available
+  navigator.serial.getPorts().then(ports => {
+    if (ports.length > 0) {
+      setStatus(`${ports.length} previously authorized port(s) available. Click Connect to choose.`);
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
